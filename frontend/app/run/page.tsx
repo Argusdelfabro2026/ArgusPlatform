@@ -12,6 +12,7 @@ import TerminalLog from '@/components/TerminalLog';
 import StepPanel from '@/components/StepPanel';
 import RunSummary from '@/components/RunSummary';
 import ControlResultsTable from '@/components/ControlResultsTable';
+import MissingCategoriesPanel from '@/components/MissingCategoriesPanel';
 import DrillDownModal from '@/components/DrillDownModal';
 
 let lineCounter = 0;
@@ -305,6 +306,12 @@ export default function RunPage() {
         )}
         {controlVariances && controlVariances.length > 0 && (
           <ControlResultsTable
+            variances={controlVariances}
+            onRowClick={setDrilldown}
+          />
+        )}
+        {controlVariances && controlVariances.length > 0 && (
+          <MissingCategoriesPanel
             variances={controlVariances}
             onRowClick={setDrilldown}
           />

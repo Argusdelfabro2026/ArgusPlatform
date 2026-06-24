@@ -474,6 +474,61 @@ class Exporter:
                 row_idx += 1
 
         _auto_width(ws)
+
+        # ── Sheet 2: Missing Categories ───────────────────────────────────────
+        missing = [v for v in variances if v.origen in ("BANCO", "CAJA")]
+        if missing:
+            wm = wb.create_sheet("Missing Categories")
+
+            wm.merge_cells("A1:D1")
+            cm = wm["A1"]
+            cm.value     = "ARGUS — Missing Categories (only in one source)"
+            cm.font      = Font(bold=True, size=12, color="FFFFFF", name="Calibri")
+            cm.fill      = _header_fill("9C0006")
+            cm.alignment = ALIGN_CENTER
+            wm.row_dimensions[1].height = 20
+
+            _set_header_row(wm, ["MES", "CATEGORÍA", "FUENTE", "TOTAL IMPORTE"], _header_fill("9C0006"), row=2)
+            wm.freeze_panes = "A3"
+
+            # Group: Bank Only first, then Caja Only
+            banco_only = [v for v in missing if v.origen == "BANCO"]
+            caja_only  = [v for v in missing if v.origen == "CAJA"]
+
+            row_idx = 3
+            for group_label, group, total_field in [
+                ("BANK ONLY",  banco_only, "total_banco"),
+                ("CAJA ONLY",  caja_only,  "total_caja"),
+            ]:
+                if not group:
+                    continue
+                # Group header
+                gc = wm.cell(row=row_idx, column=1, value=group_label)
+                gc.font      = Font(bold=True, color="FFFFFF", name="Calibri", size=10)
+                gc.fill      = _header_fill("404040")
+                gc.alignment = ALIGN_LEFT
+                for col in range(2, 5):
+                    c2 = wm.cell(row=row_idx, column=col)
+                    c2.fill = _header_fill("404040")
+                row_idx += 1
+
+                for v in group:
+                    amount = getattr(v, total_field)
+                    row_data = [v.mes, v.categoria, v.origen, amount]
+                    for col_idx, val in enumerate(row_data, start=1):
+                        cell = wm.cell(row=row_idx, column=col_idx, value=val)
+                        cell.font      = FONT_NORMAL
+                        cell.border    = THIN_BORDER
+                        cell.fill      = _header_fill("FCE4D6")
+                        if col_idx == 4:
+                            cell.number_format = PESO_FORMAT
+                            cell.alignment     = ALIGN_RIGHT
+                        if col_idx in (1, 3):
+                            cell.alignment = ALIGN_CENTER
+                    row_idx += 1
+
+            _auto_width(wm)
+
         wb.save(path)
 
     # ── File 3: Cash register export ─────────────────────────────────────────
