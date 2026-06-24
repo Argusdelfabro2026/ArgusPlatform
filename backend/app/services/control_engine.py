@@ -15,7 +15,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from app.models import Transaction
 
@@ -51,22 +51,35 @@ def _variance_pct(total_banco: float, total_caja: float, diferencia: float) -> f
 def run_control(
     bank_transactions: List[Transaction],
     caja_rows: List[dict],
-) -> List[ControlVariance]:
+) -> Tuple[List[ControlVariance], Dict[tuple, dict]]:
     """
     Build monthly category pivots from both sources and compute signed variances.
 
     Bank side   : sum of importe_neto (signed) per (month, Cat. Nombre)
     Caja side   : sum of importe2     (signed) per (month, TIPO stripped)
     Category match: literal uppercase comparison after stripping whitespace.
+
+    Returns (variances, drilldown) where drilldown maps (mes, cat) →
+    {"banco": [...tx dicts], "caja": [...tx dicts]} for the detail view.
     """
+    drilldown: dict = defaultdict(lambda: {"banco": [], "caja": []})
 
     # ── Bank pivot: (month, CATEGORY) → sum importe_neto (signed) ───────────
     bank_pivot: dict = defaultdict(float)
     for tx in bank_transactions:
         if not tx.categoria_nombre:
             continue
-        key = (_month_key(tx.fecha), tx.categoria_nombre.strip().upper())
+        mes = _month_key(tx.fecha)
+        cat = tx.categoria_nombre.strip().upper()
+        key = (mes, cat)
         bank_pivot[key] += tx.importe_neto   # signed — no abs()
+        drilldown[key]["banco"].append({
+            "fecha":      tx.fecha.isoformat() if tx.fecha else None,
+            "empresa":    tx.empresa,
+            "banco":      tx.banco,
+            "descripcion": tx.descripcion,
+            "importe":    round(tx.importe_neto, 2),
+        })
 
     # ── Caja pivot: (month, CATEGORY) → sum importe (signed, = importe2) ────
     caja_pivot: dict = defaultdict(float)
@@ -74,8 +87,15 @@ def run_control(
         cat = (row.get("categoria") or "").strip().upper()
         if not cat:
             continue
-        key = (_month_key(row.get("fecha")), cat)
+        mes = _month_key(row.get("fecha"))
+        key = (mes, cat)
         caja_pivot[key] += row.get("importe", 0.0)   # signed — no abs()
+        fecha = row.get("fecha")
+        drilldown[key]["caja"].append({
+            "fecha":      fecha.isoformat() if fecha else None,
+            "descripcion": row.get("descripcion", ""),
+            "importe":    round(row.get("importe", 0.0), 2),
+        })
 
     # ── Cross-join all (month, category) keys ────────────────────────────────
     all_keys = set(bank_pivot) | set(caja_pivot)
@@ -123,4 +143,4 @@ def run_control(
         f"Control — {ok} OK, {alert} ALERT, {critical} CRITICAL "
         f"({len(variances)} total)"
     )
-    return variances
+    return variances, dict(drilldown)

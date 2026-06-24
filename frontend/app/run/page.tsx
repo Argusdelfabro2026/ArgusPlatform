@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { LogLine, StepState, SSEEvent, RunStats } from '@/lib/types';
+import type { LogLine, StepState, SSEEvent, RunStats, ControlVariance } from '@/lib/types';
 import {
   streamPaso1,
   streamPaso3,
@@ -11,6 +11,8 @@ import {
 import TerminalLog from '@/components/TerminalLog';
 import StepPanel from '@/components/StepPanel';
 import RunSummary from '@/components/RunSummary';
+import ControlResultsTable from '@/components/ControlResultsTable';
+import DrillDownModal from '@/components/DrillDownModal';
 
 let lineCounter = 0;
 
@@ -70,6 +72,8 @@ export default function RunPage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [runStats, setRunStats] = useState<RunStats | null>(null);
+  const [controlVariances, setControlVariances] = useState<ControlVariance[] | null>(null);
+  const [drilldown, setDrilldown] = useState<ControlVariance | null>(null);
 
   const cancelRef = useRef<(() => void) | null>(null);
 
@@ -134,10 +138,12 @@ export default function RunPage() {
         setStepCtrl((s) => ({ ...s, progress: event.pct }));
       } else if (event.type === 'done') {
         setStepCtrl((s) => ({ ...s, status: 'done', progress: 100 }));
+        if (event.variances) setControlVariances(event.variances);
         setIsRunning(false);
         addSep();
         addLog('✓ PASO 2 COMPLETADO — Control Caja Digital');
         addLog('  Descargá el reporte de varianzas por categoría');
+        if (event.variances) addLog(`  ${event.variances.length} categorías analizadas — hacé click en una fila para ver el detalle`);
         addSep();
       } else if (event.type === 'error') {
         setStepCtrl((s) => ({ ...s, status: 'error', errorMsg: event.msg }));
@@ -193,6 +199,8 @@ export default function RunPage() {
     setRunId(null);
     setIsRunning(false);
     setRunStats(null);
+    setControlVariances(null);
+    setDrilldown(null);
     setLogLines([
       makeLogLine('root@argus:~/run$ ./argus --reset'),
       makeLogLine('Pipeline reset — listo para nuevo run'),
@@ -281,8 +289,8 @@ export default function RunPage() {
         )}
       </aside>
 
-      {/* ── Right: Terminal log + Run Summary ──────────────────────────── */}
-      <section className="flex-1 p-3 min-h-0 min-w-0 flex flex-col gap-3">
+      {/* ── Right: Terminal log + Run Summary + Control Results ─────────── */}
+      <section className="flex-1 p-3 min-h-0 min-w-0 flex flex-col gap-3 overflow-y-auto">
         <TerminalLog
           lines={logLines}
           isRunning={isRunning}
@@ -295,7 +303,22 @@ export default function RunPage() {
         {runStats && runId && (
           <RunSummary stats={runStats} runId={runId} />
         )}
+        {controlVariances && controlVariances.length > 0 && (
+          <ControlResultsTable
+            variances={controlVariances}
+            onRowClick={setDrilldown}
+          />
+        )}
       </section>
+
+      {/* ── Drill-down modal ─────────────────────────────────────────────── */}
+      {drilldown && runId && (
+        <DrillDownModal
+          runId={runId}
+          variance={drilldown}
+          onClose={() => setDrilldown(null)}
+        />
+      )}
     </div>
   );
 }

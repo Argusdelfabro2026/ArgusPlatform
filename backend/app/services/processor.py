@@ -28,6 +28,7 @@ class Processor:
         self.exporter    = Exporter()
         self.reconciler  = Reconciler()
         self._result: Optional[ProcessResult] = None
+        self._control_drilldown: dict = {}  # (mes, cat) → {banco:[...], caja:[...]}
 
     def reset(self):
         """Reset all state — called when the user starts over."""
@@ -219,7 +220,8 @@ class Processor:
         progress(f"  → {len(caja_rows)} registros cargados (canal=1 / Transferencia)")
 
         progress("Construyendo pivotes mensuales por categoría...")
-        variances = run_control(result.transactions, caja_rows)
+        variances, drilldown = run_control(result.transactions, caja_rows)
+        self._control_drilldown = drilldown
 
         critical = sum(1 for v in variances if v.estado == "CRITICAL")
         alert    = sum(1 for v in variances if v.estado == "ALERT")
@@ -247,6 +249,11 @@ class Processor:
 
         result.control_variances = variances
         return result
+
+    def get_control_drilldown(self, mes: str, categoria: str) -> dict:
+        """Return individual transactions for a (month, category) pair."""
+        key = (mes, categoria.strip().upper())
+        return self._control_drilldown.get(key, {"banco": [], "caja": []})
 
     # ── Step 3: Caja Fábrica Digital ─────────────────────────────────────────
 

@@ -82,10 +82,12 @@ def _progress_event(pct: int) -> str:
     return json.dumps({"type": "progress", "pct": pct})
 
 
-def _done_event(run_id: str, file_url: str, stats: dict = None) -> str:
+def _done_event(run_id: str, file_url: str, stats: dict = None, variances: list = None) -> str:
     payload = {"type": "done", "run_id": run_id, "file_url": file_url}
     if stats:
         payload["stats"] = stats
+    if variances is not None:
+        payload["variances"] = variances
     return json.dumps(payload)
 
 
@@ -458,10 +460,36 @@ async def proceso_control(
                 logger.warning(f"Output upload failed: {e}")
                 yield _log_event(f"  ⚠ Storage upload failed: {e}")
 
+        variances_data = [
+            {
+                "mes":          v.mes,
+                "categoria":    v.categoria,
+                "total_banco":  v.total_banco,
+                "total_caja":   v.total_caja,
+                "diferencia":   v.diferencia,
+                "varianza_pct": v.varianza_pct,
+                "estado":       v.estado,
+                "origen":       v.origen,
+            }
+            for v in (getattr(result, "control_variances", []) or [])
+        ]
         yield _progress_event(100)
-        yield _done_event(run_id, file_url)
+        yield _done_event(run_id, file_url, variances=variances_data)
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/control/{run_id}/drilldown")
+async def get_control_drilldown(run_id: str, mes: str, categoria: str):
+    """Return individual transactions for one (month, category) from the last control run."""
+    processor = _processors.get(run_id)
+    if processor is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Run '{run_id}' not in memory — re-run Step 1 and Control.",
+        )
+    data = processor.get_control_drilldown(mes, categoria)
+    return {"mes": mes, "categoria": categoria, **data}
 
 
 # ── Step 3: Caja Fábrica Digital ─────────────────────────────────────────────

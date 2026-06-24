@@ -21,8 +21,8 @@ logger = logging.getLogger("argus.caja_dir")
 
 # Standard column name aliases (case-insensitive exact match after strip)
 _FECHA_NAMES     = {"fecha", "date", "fecha_movimiento", "fecha_mov", "fecha mov"}
-_CATEGORIA_NAMES = {"tipo", "categoria", "categoría", "concepto", "descripcion",
-                    "descripción", "rubro"}
+_CATEGORIA_NAMES = {"tipo", "categoria", "categoría", "concepto", "rubro"}
+_DESC_NAMES      = {"descripcion", "descripción", "description", "detalle", "glosa"}
 _IMPORTE_NAMES   = {"importe", "monto", "amount", "total", "haber", "debe"}
 _CANAL_NAMES     = {"canal", "channel", "tipo_canal", "tipo canal"}
 
@@ -60,6 +60,8 @@ def _detect_columns(header_row: tuple) -> Dict[str, int]:
             mapping["fecha"] = idx
         if name in _CATEGORIA_NAMES and "categoria" not in mapping:
             mapping["categoria"] = idx
+        if name in _DESC_NAMES and "descripcion" not in mapping:
+            mapping["descripcion"] = idx
         if name in _IMPORTE_NAMES and "importe" not in mapping and "importe" not in priority_mapped:
             mapping["importe"] = idx
         if name in _CANAL_NAMES and "canal" not in mapping and "canal" not in priority_mapped:
@@ -155,7 +157,14 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
         except (TypeError, ValueError):
             pass
 
-        rows.append({"fecha": fecha, "categoria": categoria, "importe": importe})
+        desc_idx = col_map.get("descripcion")
+        descripcion = (
+            str(row[desc_idx]).strip()
+            if (desc_idx is not None and row[desc_idx] is not None)
+            else ""
+        )
+
+        rows.append({"fecha": fecha, "categoria": categoria, "importe": importe, "descripcion": descripcion})
 
     if "canal" in col_map:
         logger.info(

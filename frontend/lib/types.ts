@@ -84,11 +84,38 @@ export interface RunStats {
   banks: number;
 }
 
+export interface ControlVariance {
+  mes: string;
+  categoria: string;
+  total_banco: number;
+  total_caja: number;
+  diferencia: number;
+  varianza_pct: number;
+  estado: 'OK' | 'ALERT' | 'CRITICAL';
+  origen: 'BANCO' | 'CAJA' | 'AMBOS';
+}
+
+export interface DrillDownTx {
+  fecha: string | null;
+  descripcion: string;
+  importe: number;
+  empresa?: string;
+  banco?: string;
+}
+
+export interface ControlDrillDown {
+  mes: string;
+  categoria: string;
+  banco: DrillDownTx[];
+  caja: DrillDownTx[];
+}
+
 export interface SSEDoneEvent {
   type: 'done';
   run_id: string;
   file_url: string;
   stats?: RunStats;
+  variances?: ControlVariance[];
 }
 
 export interface SSEErrorEvent {

@@ -9,6 +9,7 @@ import type {
   OutputFile,
   TransactionPage,
   SSEEvent,
+  ControlDrillDown,
 } from './types';
 
 const BACKEND_URL =
@@ -165,6 +166,17 @@ export function streamPaso3(
   const fd = new FormData();
   fd.append('caja', caja);
   return streamSSE(`${BACKEND_URL}/api/process/paso3/${runId}`, fd, onEvent);
+}
+
+export async function fetchControlDrilldown(
+  runId: string,
+  mes: string,
+  categoria: string
+): Promise<ControlDrillDown> {
+  const params = new URLSearchParams({ mes, categoria });
+  return apiFetch<ControlDrillDown>(
+    `/api/process/control/${runId}/drilldown?${params}`
+  );
 }
 
 export function streamControl(
