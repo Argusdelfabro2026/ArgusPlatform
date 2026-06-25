@@ -144,6 +144,18 @@ export default function DrillDownModal({ runId, variance, onClose }: Props) {
             <span className="text-terminal-gray">Origen  </span>
             <span className="text-terminal-white">{variance.origen}</span>
           </div>
+          {variance.error_type && variance.error_type !== '—' && (
+            <div>
+              <span className="text-terminal-gray">Error Type  </span>
+              <span className="text-terminal-amber font-bold">{variance.error_type}</span>
+            </div>
+          )}
+          {variance.responsable && variance.responsable !== '—' && (
+            <div>
+              <span className="text-terminal-gray">Responsable  </span>
+              <span className="text-terminal-white">{variance.responsable}</span>
+            </div>
+          )}
         </div>
 
         {/* Body */}

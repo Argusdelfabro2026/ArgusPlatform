@@ -93,6 +93,8 @@ export interface ControlVariance {
   varianza_pct: number;
   estado: 'OK' | 'ALERT' | 'CRITICAL';
   origen: 'BANCO' | 'CAJA' | 'AMBOS';
+  error_type: string;
+  responsable: string;
 }
 
 export interface DrillDownTx {

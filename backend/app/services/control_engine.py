@@ -35,6 +35,51 @@ class ControlVariance:
     varianza_pct: float   # |diff| / max(|caja|, |banco|) × 100
     estado: str           # "OK" | "ALERT" | "CRITICAL"
     origen: str           # "BANCO" | "CAJA" | "AMBOS"
+    error_type: str = ""  # classification from _classify_error()
+    responsable: str = "" # responsible party
+
+
+def _classify_error(
+    origen: str,
+    estado: str,
+    total_banco: float,
+    total_caja: float,
+    banco_txs: list,
+    caja_txs: list,
+) -> tuple:
+    """Return (error_type, responsable) for a variance entry."""
+    if estado == "OK":
+        return ("—", "—")
+
+    if origen == "BANCO":
+        return ("Missing in Caja", "Emiliano")
+    if origen == "CAJA":
+        return ("Missing in Bank", "André")
+
+    # AMBOS with variance — heuristic sub-classification
+    abs_banco = abs(total_banco)
+    abs_caja  = abs(total_caja)
+
+    # Duplicate entry: one total ≈ 2× the other
+    if abs_caja > 0:
+        ratio = abs_banco / abs_caja
+        if 1.8 < ratio < 2.2:
+            return ("Duplicate Entry", "Sistema / Humano")
+        if 0.45 < ratio < 0.56:
+            return ("Duplicate Entry", "Sistema / Humano")
+
+    # Split transaction: tx count differs 2×+ but amounts are close (< 15% variance)
+    bc = len(banco_txs)
+    cc = len(caja_txs)
+    if bc > 0 and cc > 0:
+        count_ratio = max(bc, cc) / min(bc, cc)
+        abs_diff = abs(total_banco - total_caja)
+        smaller = min(abs_banco, abs_caja)
+        pct_diff = (abs_diff / smaller * 100) if smaller > 0 else 100
+        if count_ratio >= 2 and pct_diff < 15:
+            return ("Split Transaction", "Diseño Contable")
+
+    return ("Category Mismatch", "Emiliano + André")
 
 
 def _month_key(d: Optional[date]) -> str:
@@ -124,6 +169,16 @@ def run_control(
             else:
                 estado = "OK"
 
+        dd_key = (mes, cat)
+        error_type, responsable = _classify_error(
+            origen=origen,
+            estado=estado,
+            total_banco=total_banco,
+            total_caja=total_caja,
+            banco_txs=drilldown[dd_key]["banco"],
+            caja_txs=drilldown[dd_key]["caja"],
+        )
+
         variances.append(
             ControlVariance(
                 mes=mes,
@@ -134,6 +189,8 @@ def run_control(
                 varianza_pct=varianza_pct,
                 estado=estado,
                 origen=origen,
+                error_type=error_type,
+                responsable=responsable,
             )
         )
 

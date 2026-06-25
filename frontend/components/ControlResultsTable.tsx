@@ -61,6 +61,8 @@ export default function ControlResultsTable({ variances, onRowClick }: Props) {
               <th className="px-3 py-1.5 text-right whitespace-nowrap">VAR%</th>
               <th className="px-3 py-1.5 text-center whitespace-nowrap">ESTADO</th>
               <th className="px-3 py-1.5 text-center whitespace-nowrap">ORIGEN</th>
+              <th className="px-3 py-1.5 whitespace-nowrap">ERROR TYPE</th>
+              <th className="px-3 py-1.5 whitespace-nowrap">RESPONSABLE</th>
             </tr>
           </thead>
           <tbody>
@@ -91,6 +93,12 @@ export default function ControlResultsTable({ variances, onRowClick }: Props) {
                 </td>
                 <td className="px-3 py-1.5 text-center text-terminal-gray whitespace-nowrap">
                   {v.origen}
+                </td>
+                <td className="px-3 py-1.5 text-terminal-white whitespace-nowrap">
+                  {v.error_type || '—'}
+                </td>
+                <td className="px-3 py-1.5 text-terminal-gray whitespace-nowrap">
+                  {v.responsable || '—'}
                 </td>
               </tr>
             ))}
