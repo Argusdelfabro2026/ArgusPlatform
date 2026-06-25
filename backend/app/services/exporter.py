@@ -396,7 +396,7 @@ class Exporter:
         ws = wb.active
         ws.title = "Control Caja Dir"
 
-        ws.merge_cells("A1:J1")
+        ws.merge_cells("A1:L1")
         c = ws["A1"]
         c.value = (
             f"ARGUS — Control Caja Dirección vs Banco  |  "
@@ -410,7 +410,7 @@ class Exporter:
         headers = [
             "MES", "CATEGORÍA", "TOTAL BANCO", "TOTAL CAJA DIR",
             "DIFERENCIA", "VARIANZA %", "ESTADO", "ORIGEN",
-            "ERROR TYPE", "RESPONSABLE",
+            "ERROR TYPE", "RESPONSABLE", "ACCIÓN SUGERIDA", "PRIORIDAD",
         ]
         _set_header_row(ws, headers, FILL_HEADER_BLUE, row=2)
         ws.freeze_panes = "A3"
@@ -435,6 +435,8 @@ class Exporter:
                 v.estado, v.origen,
                 getattr(v, "error_type", ""),
                 getattr(v, "responsable", ""),
+                getattr(v, "accion", ""),
+                getattr(v, "prioridad", ""),
             ]
             fill, text_color = status_styles.get(v.estado, (None, "000000"))
 
@@ -454,8 +456,10 @@ class Exporter:
                 if col_idx == 6:   # VARIANCE %
                     cell.number_format = '0.00%'
                     cell.alignment     = ALIGN_RIGHT
-                if col_idx in (1, 7, 8, 9, 10):
+                if col_idx in (1, 7, 8, 9, 10, 12):
                     cell.alignment = ALIGN_CENTER
+                if col_idx == 11:  # ACCIÓN SUGERIDA — wrap long text
+                    cell.alignment = Alignment(wrap_text=True)
 
         # Summary counts at bottom
         if variances:

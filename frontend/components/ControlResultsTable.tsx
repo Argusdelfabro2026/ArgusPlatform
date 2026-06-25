@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import type { ControlVariance } from '@/lib/types';
 
 interface Props {
@@ -19,6 +20,14 @@ const ROW_BG: Record<string, string> = {
   CRITICAL: 'hover:bg-terminal-red/5',
 };
 
+const PRIORIDAD_STYLES: Record<string, string> = {
+  CRITICAL: 'text-terminal-red   border-terminal-red',
+  HIGH:     'text-terminal-amber border-terminal-amber',
+  MEDIUM:   'text-terminal-cyan  border-terminal-cyan',
+  LOW:      'text-terminal-green border-terminal-green',
+  '—':      'text-terminal-gray  border-terminal-gray/30',
+};
+
 function fmt(n: number): string {
   return new Intl.NumberFormat('es-AR', {
     minimumFractionDigits: 2,
@@ -26,10 +35,31 @@ function fmt(n: number): string {
   }).format(n);
 }
 
+function unique(items: string[]): string[] {
+  return Array.from(new Set(items)).sort();
+}
+
 export default function ControlResultsTable({ variances, onRowClick }: Props) {
+  const [filterErrorType, setFilterErrorType] = useState('ALL');
+  const [filterResponsable, setFilterResponsable] = useState('ALL');
+  const [filterPrioridad, setFilterPrioridad] = useState('ALL');
+
   const critical = variances.filter(v => v.estado === 'CRITICAL').length;
   const alert    = variances.filter(v => v.estado === 'ALERT').length;
   const ok       = variances.filter(v => v.estado === 'OK').length;
+
+  const errorTypes   = useMemo(() => unique(variances.map(v => v.error_type || '—')), [variances]);
+  const responsables = useMemo(() => unique(variances.map(v => v.responsable || '—')), [variances]);
+  const prioridades  = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', '—'];
+
+  const filtered = useMemo(() => variances.filter(v => {
+    if (filterErrorType   !== 'ALL' && (v.error_type || '—')   !== filterErrorType)   return false;
+    if (filterResponsable !== 'ALL' && (v.responsable || '—')  !== filterResponsable) return false;
+    if (filterPrioridad   !== 'ALL' && (v.prioridad || '—')    !== filterPrioridad)   return false;
+    return true;
+  }), [variances, filterErrorType, filterResponsable, filterPrioridad]);
+
+  const activeFilters = [filterErrorType, filterResponsable, filterPrioridad].filter(f => f !== 'ALL').length;
 
   return (
     <div className="border border-terminal-border rounded bg-terminal-bg-secondary font-mono text-xs overflow-hidden">
@@ -40,7 +70,65 @@ export default function ControlResultsTable({ variances, onRowClick }: Props) {
           <span className="text-terminal-green">{ok} OK</span>
           <span className="text-terminal-amber">{alert} ALERT</span>
           <span className="text-terminal-red">{critical} CRITICAL</span>
+          {filtered.length !== variances.length && (
+            <span className="text-terminal-gray">
+              ({filtered.length}/{variances.length} shown)
+            </span>
+          )}
         </div>
+      </div>
+
+      {/* Filters */}
+      <div className="px-3 py-2 border-b border-terminal-border bg-terminal-bg flex flex-wrap gap-3 items-center">
+        <span className="text-terminal-gray text-xs shrink-0">
+          FILTER{activeFilters > 0 ? ` (${activeFilters})` : ''}:
+        </span>
+
+        {/* Error Type */}
+        <select
+          value={filterErrorType}
+          onChange={e => setFilterErrorType(e.target.value)}
+          className="bg-terminal-bg-secondary border border-terminal-border text-terminal-white text-xs px-2 py-0.5 rounded cursor-pointer"
+        >
+          <option value="ALL">All Error Types</option>
+          {errorTypes.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        {/* Responsible */}
+        <select
+          value={filterResponsable}
+          onChange={e => setFilterResponsable(e.target.value)}
+          className="bg-terminal-bg-secondary border border-terminal-border text-terminal-white text-xs px-2 py-0.5 rounded cursor-pointer"
+        >
+          <option value="ALL">All Responsible</option>
+          {responsables.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+
+        {/* Priority toggle pills */}
+        <div className="flex gap-1">
+          {prioridades.map(p => (
+            <button
+              key={p}
+              onClick={() => setFilterPrioridad(filterPrioridad === p ? 'ALL' : p)}
+              className={`px-2 py-0.5 border rounded text-xs font-bold transition-colors ${
+                filterPrioridad === p
+                  ? PRIORIDAD_STYLES[p]
+                  : 'text-terminal-gray border-terminal-border/40 hover:border-terminal-border'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {activeFilters > 0 && (
+          <button
+            onClick={() => { setFilterErrorType('ALL'); setFilterResponsable('ALL'); setFilterPrioridad('ALL'); }}
+            className="text-terminal-gray hover:text-terminal-white text-xs px-1"
+          >
+            ✕ clear
+          </button>
+        )}
       </div>
 
       {/* Click hint */}
@@ -50,7 +138,7 @@ export default function ControlResultsTable({ variances, onRowClick }: Props) {
 
       {/* Table */}
       <div className="overflow-x-auto max-h-64 overflow-y-auto">
-        <table className="w-full min-w-[700px]">
+        <table className="w-full min-w-[900px]">
           <thead className="sticky top-0 bg-terminal-bg border-b border-terminal-border">
             <tr className="text-terminal-gray text-left">
               <th className="px-3 py-1.5 whitespace-nowrap">MES</th>
@@ -60,13 +148,20 @@ export default function ControlResultsTable({ variances, onRowClick }: Props) {
               <th className="px-3 py-1.5 text-right whitespace-nowrap">DIFERENCIA</th>
               <th className="px-3 py-1.5 text-right whitespace-nowrap">VAR%</th>
               <th className="px-3 py-1.5 text-center whitespace-nowrap">ESTADO</th>
-              <th className="px-3 py-1.5 text-center whitespace-nowrap">ORIGEN</th>
-              <th className="px-3 py-1.5 whitespace-nowrap">ERROR TYPE</th>
+              <th className="px-3 py-1.5 text-center whitespace-nowrap">ERROR TYPE</th>
               <th className="px-3 py-1.5 whitespace-nowrap">RESPONSABLE</th>
+              <th className="px-3 py-1.5 whitespace-nowrap">ACCIÓN</th>
+              <th className="px-3 py-1.5 text-center whitespace-nowrap">PRIORIDAD</th>
             </tr>
           </thead>
           <tbody>
-            {variances.map((v, i) => (
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="px-3 py-6 text-center text-terminal-gray-dim italic">
+                  No results match the current filters
+                </td>
+              </tr>
+            ) : filtered.map((v, i) => (
               <tr
                 key={`${v.mes}-${v.categoria}-${i}`}
                 onClick={() => onRowClick(v)}
@@ -91,14 +186,23 @@ export default function ControlResultsTable({ variances, onRowClick }: Props) {
                     {v.estado}
                   </span>
                 </td>
-                <td className="px-3 py-1.5 text-center text-terminal-gray whitespace-nowrap">
-                  {v.origen}
-                </td>
-                <td className="px-3 py-1.5 text-terminal-white whitespace-nowrap">
+                <td className="px-3 py-1.5 text-terminal-white whitespace-nowrap text-center">
                   {v.error_type || '—'}
                 </td>
                 <td className="px-3 py-1.5 text-terminal-gray whitespace-nowrap">
                   {v.responsable || '—'}
+                </td>
+                <td className="px-3 py-1.5 text-terminal-gray-dim max-w-xs truncate" title={v.accion || ''}>
+                  {v.accion || '—'}
+                </td>
+                <td className="px-3 py-1.5 text-center whitespace-nowrap">
+                  {v.prioridad && v.prioridad !== '—' ? (
+                    <span className={`px-1.5 py-0.5 border rounded text-xs font-bold ${PRIORIDAD_STYLES[v.prioridad] ?? ''}`}>
+                      {v.prioridad}
+                    </span>
+                  ) : (
+                    <span className="text-terminal-gray-dim">—</span>
+                  )}
                 </td>
               </tr>
             ))}

@@ -150,10 +150,27 @@ export default function DrillDownModal({ runId, variance, onClose }: Props) {
               <span className="text-terminal-amber font-bold">{variance.error_type}</span>
             </div>
           )}
+          {variance.prioridad && variance.prioridad !== '—' && (
+            <div>
+              <span className="text-terminal-gray">Prioridad  </span>
+              <span className={`font-bold ${
+                variance.prioridad === 'CRITICAL' ? 'text-terminal-red'
+                : variance.prioridad === 'HIGH'   ? 'text-terminal-amber'
+                : variance.prioridad === 'MEDIUM' ? 'text-terminal-cyan'
+                : 'text-terminal-green'
+              }`}>{variance.prioridad}</span>
+            </div>
+          )}
           {variance.responsable && variance.responsable !== '—' && (
             <div>
               <span className="text-terminal-gray">Responsable  </span>
               <span className="text-terminal-white">{variance.responsable}</span>
+            </div>
+          )}
+          {variance.accion && variance.accion !== '—' && (
+            <div className="w-full mt-1 pt-1 border-t border-terminal-border/30">
+              <span className="text-terminal-gray">Acción  </span>
+              <span className="text-terminal-white">{variance.accion}</span>
             </div>
           )}
         </div>

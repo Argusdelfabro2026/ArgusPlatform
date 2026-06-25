@@ -472,6 +472,8 @@ async def proceso_control(
                 "origen":       v.origen,
                 "error_type":   v.error_type,
                 "responsable":  v.responsable,
+                "accion":       v.accion,
+                "prioridad":    v.prioridad,
             }
             for v in (getattr(result, "control_variances", []) or [])
         ]

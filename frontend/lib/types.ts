@@ -95,6 +95,8 @@ export interface ControlVariance {
   origen: 'BANCO' | 'CAJA' | 'AMBOS';
   error_type: string;
   responsable: string;
+  accion: string;
+  prioridad: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | '—';
 }
 
 export interface DrillDownTx {

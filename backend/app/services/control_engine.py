@@ -37,24 +37,37 @@ class ControlVariance:
     origen: str           # "BANCO" | "CAJA" | "AMBOS"
     error_type: str = ""  # classification from _classify_error()
     responsable: str = "" # responsible party
+    accion: str = ""      # suggested corrective action
+    prioridad: str = ""   # LOW | MEDIUM | HIGH | CRITICAL
 
 
 def _classify_error(
     origen: str,
     estado: str,
+    varianza_pct: float,
     total_banco: float,
     total_caja: float,
     banco_txs: list,
     caja_txs: list,
 ) -> tuple:
-    """Return (error_type, responsable) for a variance entry."""
+    """Return (error_type, responsable, accion, prioridad) for a variance entry."""
     if estado == "OK":
-        return ("—", "—")
+        return ("—", "—", "—", "—")
 
     if origen == "BANCO":
-        return ("Missing in Caja", "Emiliano")
+        return (
+            "Missing in Caja",
+            "Emiliano",
+            "Review Emiliano bank categorization",
+            "CRITICAL",
+        )
     if origen == "CAJA":
-        return ("Missing in Bank", "André")
+        return (
+            "Missing in Bank",
+            "André",
+            "Correct André Caja Direction entry",
+            "CRITICAL",
+        )
 
     # AMBOS with variance — heuristic sub-classification
     abs_banco = abs(total_banco)
@@ -63,23 +76,41 @@ def _classify_error(
     # Duplicate entry: one total ≈ 2× the other
     if abs_caja > 0:
         ratio = abs_banco / abs_caja
-        if 1.8 < ratio < 2.2:
-            return ("Duplicate Entry", "Sistema / Humano")
-        if 0.45 < ratio < 0.56:
-            return ("Duplicate Entry", "Sistema / Humano")
+        if 1.8 < ratio < 2.2 or 0.45 < ratio < 0.56:
+            return (
+                "Duplicate Entry",
+                "Sistema / Humano",
+                "Deduplication rule needed — audit both sources",
+                "HIGH",
+            )
 
-    # Split transaction: tx count differs 2×+ but amounts are close (< 15% variance)
+    # Split transaction: tx count differs 2×+ but amounts are close (< 15% var)
     bc = len(banco_txs)
     cc = len(caja_txs)
     if bc > 0 and cc > 0:
         count_ratio = max(bc, cc) / min(bc, cc)
-        abs_diff = abs(total_banco - total_caja)
-        smaller = min(abs_banco, abs_caja)
-        pct_diff = (abs_diff / smaller * 100) if smaller > 0 else 100
+        smaller     = min(abs_banco, abs_caja)
+        pct_diff    = (abs(total_banco - total_caja) / smaller * 100) if smaller > 0 else 100
         if count_ratio >= 2 and pct_diff < 15:
-            return ("Split Transaction", "Diseño Contable")
+            return (
+                "Split Transaction",
+                "Diseño Contable",
+                "Consolidate split entries per accounting logic",
+                "MEDIUM",
+            )
 
-    return ("Category Mismatch", "Emiliano + André")
+    # Category Mismatch — priority follows estado
+    if varianza_pct > _CRITICAL_PCT:
+        prioridad = "HIGH"
+        accion    = "Unify category mapping dictionary — critical discrepancy"
+    elif varianza_pct > _ALERT_PCT:
+        prioridad = "MEDIUM"
+        accion    = "Review category alignment between sources"
+    else:
+        prioridad = "LOW"
+        accion    = "Monitor — minor category variance"
+
+    return ("Category Mismatch", "Emiliano + André", accion, prioridad)
 
 
 def _month_key(d: Optional[date]) -> str:
@@ -170,9 +201,10 @@ def run_control(
                 estado = "OK"
 
         dd_key = (mes, cat)
-        error_type, responsable = _classify_error(
+        error_type, responsable, accion, prioridad = _classify_error(
             origen=origen,
             estado=estado,
+            varianza_pct=varianza_pct,
             total_banco=total_banco,
             total_caja=total_caja,
             banco_txs=drilldown[dd_key]["banco"],
@@ -191,6 +223,8 @@ def run_control(
                 origen=origen,
                 error_type=error_type,
                 responsable=responsable,
+                accion=accion,
+                prioridad=prioridad,
             )
         )
 
