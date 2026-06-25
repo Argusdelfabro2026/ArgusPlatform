@@ -101,6 +101,7 @@ export interface DrillDownTx {
   importe: number;
   empresa?: string;
   banco?: string;
+  referencia?: string;
 }
 
 export interface ControlDrillDown {

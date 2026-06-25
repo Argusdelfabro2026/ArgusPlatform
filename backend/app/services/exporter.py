@@ -380,17 +380,18 @@ class Exporter:
         self,
         variances: list,
         output_folder: str,
+        drilldown: dict = None,
     ) -> List[str]:
         """Control Caja Dirección — export monthly category variance report."""
         folder = Path(output_folder)
         folder.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = folder / f"argus_control_caja_dir_{timestamp}.xlsx"
-        self._export_control(variances, path)
+        self._export_control(variances, path, drilldown or {})
         logger.info(f"Exported: {path.name}")
         return [str(path)]
 
-    def _export_control(self, variances: list, path: Path):
+    def _export_control(self, variances: list, path: Path, drilldown: dict = None):
         wb = Workbook()
         ws = wb.active
         ws.title = "Control Caja Dir"
@@ -529,7 +530,82 @@ class Exporter:
 
             _auto_width(wm)
 
+        if drilldown:
+            self._add_evidence_sheet(wb, variances, drilldown)
+
         wb.save(path)
+
+    def _add_evidence_sheet(self, wb, variances: list, drilldown: dict):
+        """Add a Transaction Evidence sheet: one row per transaction per category."""
+        we = wb.create_sheet("Transaction Evidence")
+
+        we.merge_cells("A1:I1")
+        ce = we["A1"]
+        ce.value     = "ARGUS — Transaction Evidence (Step 2 Control Caja Dirección)"
+        ce.font      = Font(bold=True, size=12, color="FFFFFF", name="Calibri")
+        ce.fill      = _header_fill("1F4E79")
+        ce.alignment = ALIGN_CENTER
+        we.row_dimensions[1].height = 20
+
+        headers = [
+            "CATEGORÍA", "MES", "FUENTE",
+            "FECHA", "EMPRESA / BANCO", "DESCRIPCIÓN", "REFERENCIA", "IMPORTE", "ESTADO",
+        ]
+        _set_header_row(we, headers, FILL_HEADER_BLUE, row=2)
+        we.freeze_panes = "A3"
+
+        fill_banco = _header_fill("DDEEFF")
+        fill_caja  = _header_fill("FFF5CC")
+
+        row_idx = 3
+        for v in variances:
+            key = (v.mes, v.categoria)
+            dd  = drilldown.get(key, {"banco": [], "caja": []})
+
+            for tx in dd.get("banco", []):
+                empresa_banco = f"{tx.get('empresa','')} / {tx.get('banco','')}".strip(" /")
+                row = [
+                    v.categoria, v.mes, "BANCO",
+                    tx.get("fecha"), empresa_banco,
+                    tx.get("descripcion", ""),
+                    tx.get("referencia", ""),
+                    tx.get("importe", 0.0),
+                    v.estado,
+                ]
+                for col_idx, val in enumerate(row, start=1):
+                    cell = we.cell(row=row_idx, column=col_idx, value=val)
+                    cell.font   = FONT_NORMAL
+                    cell.border = THIN_BORDER
+                    cell.fill   = fill_banco
+                    if col_idx == 8:
+                        cell.number_format = PESO_FORMAT
+                        cell.alignment     = ALIGN_RIGHT
+                    if col_idx in (1, 2, 3, 9):
+                        cell.alignment = ALIGN_CENTER
+                row_idx += 1
+
+            for tx in dd.get("caja", []):
+                row = [
+                    v.categoria, v.mes, "CAJA DIGITAL",
+                    tx.get("fecha"), "",
+                    tx.get("descripcion", ""),
+                    "",
+                    tx.get("importe", 0.0),
+                    v.estado,
+                ]
+                for col_idx, val in enumerate(row, start=1):
+                    cell = we.cell(row=row_idx, column=col_idx, value=val)
+                    cell.font   = FONT_NORMAL
+                    cell.border = THIN_BORDER
+                    cell.fill   = fill_caja
+                    if col_idx == 8:
+                        cell.number_format = PESO_FORMAT
+                        cell.alignment     = ALIGN_RIGHT
+                    if col_idx in (1, 2, 3, 9):
+                        cell.alignment = ALIGN_CENTER
+                row_idx += 1
+
+        _auto_width(we)
 
     # ── File 3: Cash register export ─────────────────────────────────────────
 

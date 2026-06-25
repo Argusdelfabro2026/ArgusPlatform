@@ -237,6 +237,7 @@ class Processor:
         generated = self.exporter.export_control(
             variances=variances,
             output_folder=output_folder,
+            drilldown=drilldown,
         )
         for f in generated:
             progress(f"  ✓ {Path(f).name}")

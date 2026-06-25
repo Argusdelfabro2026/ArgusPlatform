@@ -74,11 +74,12 @@ def run_control(
         key = (mes, cat)
         bank_pivot[key] += tx.importe_neto   # signed — no abs()
         drilldown[key]["banco"].append({
-            "fecha":      tx.fecha.isoformat() if tx.fecha else None,
-            "empresa":    tx.empresa,
-            "banco":      tx.banco,
-            "descripcion": tx.descripcion,
-            "importe":    round(tx.importe_neto, 2),
+            "fecha":        tx.fecha.isoformat() if tx.fecha else None,
+            "empresa":      tx.empresa,
+            "banco":        tx.banco,
+            "descripcion":  tx.descripcion,
+            "referencia":   tx.nro_referencia or "",
+            "importe":      round(tx.importe_neto, 2),
         })
 
     # ── Caja pivot: (month, CATEGORY) → sum importe (signed, = importe2) ────

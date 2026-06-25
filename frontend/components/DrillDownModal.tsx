@@ -42,6 +42,11 @@ function TxList({ txs, source }: { txs: DrillDownTx[]; source: 'banco' | 'caja' 
               <span className="text-terminal-white flex-1 truncate" title={tx.descripcion}>
                 {tx.descripcion || '—'}
               </span>
+              {tx.referencia && (
+                <span className="text-terminal-gray-dim shrink-0 hidden lg:block text-xs font-mono">
+                  #{tx.referencia}
+                </span>
+              )}
               {tx.empresa && (
                 <span className="text-terminal-gray shrink-0 hidden lg:block text-xs">
                   {tx.empresa}
