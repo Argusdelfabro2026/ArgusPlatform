@@ -179,6 +179,21 @@ export async function fetchControlDrilldown(
   );
 }
 
+export async function downloadOdooExport(runId: string): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/process/odoo-export/${runId}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Odoo export failed: ${res.status} ${text}`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `argus_odoo_export_${runId}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function streamControl(
   runId: string,
   cajaDir: File,

@@ -7,6 +7,7 @@ import {
   streamPaso3,
   streamControl,
   downloadFile,
+  downloadOdooExport,
 } from '@/lib/api';
 import TerminalLog from '@/components/TerminalLog';
 import StepPanel from '@/components/StepPanel';
@@ -77,6 +78,7 @@ export default function RunPage() {
   const [drilldown, setDrilldown] = useState<ControlVariance | null>(null);
 
   const cancelRef = useRef<(() => void) | null>(null);
+  const [odooDownloading, setOdooDownloading] = useState(false);
 
   const addLog = useCallback((msg: string, ts?: string) => {
     setLogLines((prev) => [...prev, makeLogLine(msg, ts)]);
@@ -202,6 +204,7 @@ export default function RunPage() {
     setRunStats(null);
     setControlVariances(null);
     setDrilldown(null);
+    setOdooDownloading(false);
     setLogLines([
       makeLogLine('root@argus:~/run$ ./argus --reset'),
       makeLogLine('Pipeline reset — listo para nuevo run'),
@@ -235,6 +238,31 @@ export default function RunPage() {
           onDownload={runId ? () => downloadFile(runId, 1) : undefined}
           errorMsg={step1.errorMsg}
         />
+
+        {/* Odoo export — available after Step 1 completes */}
+        {step1.status === 'done' && runId && (
+          <div className="mb-2 px-1">
+            <button
+              onClick={async () => {
+                setOdooDownloading(true);
+                try {
+                  await downloadOdooExport(runId);
+                  addLog('✓ Odoo export descargado — Canal 1 Transfer transactions');
+                } catch (e) {
+                  addLog(`✗ Odoo export error: ${e}`);
+                } finally {
+                  setOdooDownloading(false);
+                }
+              }}
+              disabled={odooDownloading}
+              className="w-full px-3 py-1.5 border border-terminal-green/50 text-terminal-green
+                rounded text-xs font-mono hover:bg-terminal-green/10 hover:border-terminal-green
+                transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+            >
+              {odooDownloading ? '⏳ generando...' : '↓ EXPORT FOR ODOO'}
+            </button>
+          </div>
+        )}
 
         <StepPanel
           step={2}

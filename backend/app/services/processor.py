@@ -256,6 +256,12 @@ class Processor:
         key = (mes, categoria.strip().upper())
         return self._control_drilldown.get(key, {"banco": [], "caja": []})
 
+    def get_odoo_export_bytes(self) -> bytes:
+        """Generate Odoo-compatible Excel bytes from Step 1 transactions."""
+        if self._result is None:
+            raise ValueError("Step 1 must complete before generating Odoo export.")
+        return self.exporter.export_odoo_bytes(self._result.transactions)
+
     # ── Step 3: Caja Fábrica Digital ─────────────────────────────────────────
 
     def run_paso3(

@@ -20,6 +20,7 @@ from typing import AsyncGenerator, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.supabase import supabase
@@ -481,6 +482,26 @@ async def proceso_control(
         yield _done_event(run_id, file_url, variances=variances_data)
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/odoo-export/{run_id}")
+async def odoo_export(run_id: str):
+    """Generate and return an Odoo-compatible Excel for the Step 1 Transfer transactions."""
+    processor = _processors.get(run_id)
+    if processor is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Run '{run_id}' not in memory — re-run Step 1 first.",
+        )
+    try:
+        xlsx_bytes = processor.get_odoo_export_bytes()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="argus_odoo_export_{run_id}.xlsx"'},
+    )
 
 
 @router.get("/control/{run_id}/drilldown")

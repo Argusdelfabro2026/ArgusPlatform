@@ -1,6 +1,7 @@
 # app/services/exporter.py
 # Generates the ARGUS output Excel files.
 
+import io
 import logging
 from datetime import date, datetime
 from pathlib import Path
@@ -658,3 +659,66 @@ class Exporter:
 
         _auto_width(ws)
         wb.save(path)
+
+    # ── Odoo export ───────────────────────────────────────────────────────────
+
+    _TRANSFER_CANALS = frozenset({"transfer", "canal 1", "1", "transferencia"})
+
+    def export_odoo_bytes(self, transactions: List[Transaction]) -> bytes:
+        """
+        Generate an Odoo-compatible Excel in memory and return raw bytes.
+
+        Column mapping:
+          Fecha    → tx.fecha formatted dd/mm/yyyy
+          Etiqueta → tx.descripcion + " | " + tx.detalle (trimmed, empty parts omitted)
+          Importe  → tx.importe_neto (signed ARS)
+
+        Only Canal = Transfer / Canal 1 records are included.
+        """
+        filtered = [
+            tx for tx in transactions
+            if tx.canal.strip().lower() in self._TRANSFER_CANALS
+        ]
+        logger.info(f"Odoo export: {len(filtered)}/{len(transactions)} transfer transactions")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Odoo Import"
+
+        ws.merge_cells("A1:C1")
+        c = ws["A1"]
+        c.value     = f"ARGUS — Odoo Bank Import  |  {date.today().strftime('%d/%m/%Y')}"
+        c.font      = Font(bold=True, size=13, color="FFFFFF", name="Calibri")
+        c.fill      = _header_fill("1F3864")
+        c.alignment = ALIGN_CENTER
+        ws.row_dimensions[1].height = 22
+
+        _set_header_row(ws, ["Fecha", "Etiqueta", "Importe"], FILL_HEADER_BLUE, row=2)
+        ws.freeze_panes = "A3"
+
+        fill_income  = _header_fill("E2EFDA")  # green tint — positive
+        fill_expense = _header_fill("FCE4D6")  # red tint   — negative
+
+        for row_idx, tx in enumerate(filtered, start=3):
+            parts    = [tx.descripcion.strip(), tx.detalle.strip()]
+            etiqueta = " | ".join(p for p in parts if p)
+            fecha_str = tx.fecha.strftime("%d/%m/%Y") if tx.fecha else ""
+            row_fill  = fill_income if tx.importe_neto >= 0 else fill_expense
+
+            vals = [fecha_str, etiqueta, tx.importe_neto]
+            for col_idx, val in enumerate(vals, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.font   = FONT_NORMAL
+                cell.border = THIN_BORDER
+                cell.fill   = row_fill
+
+            ws.cell(row=row_idx, column=1).alignment = ALIGN_CENTER
+            ws.cell(row=row_idx, column=3).number_format = PESO_FORMAT
+            ws.cell(row=row_idx, column=3).alignment    = ALIGN_RIGHT
+
+        _auto_width(ws)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.read()
