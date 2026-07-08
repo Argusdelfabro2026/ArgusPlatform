@@ -229,8 +229,11 @@ class Processor:
         progress(f"  → {len(caja_rows)} registros cargados (canal=1 / Transferencia)")
 
         progress("Construyendo pivotes mensuales por categoría...")
-        variances, drilldown = run_control(result.transactions, caja_rows)
+        progress("  ℹ Regla Mercado Pago Gerencia activa — cat.25 (meses pasados) y cat.28 (mes actual) excluidos del control")
+        variances, drilldown, mp_excluded = run_control(result.transactions, caja_rows)
         self._control_drilldown = drilldown
+        if mp_excluded:
+            progress(f"  ℹ {mp_excluded} transacciones Mercado Pago Gerencia excluidas del control (incluidas en totales Step 1)")
 
         critical = sum(1 for v in variances if v.estado == "CRITICAL")
         alert    = sum(1 for v in variances if v.estado == "ALERT")

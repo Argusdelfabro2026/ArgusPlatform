@@ -113,6 +113,41 @@ def _classify_error(
     return ("Category Mismatch", "Emiliano + André", accion, prioridad)
 
 
+# ── Mercado Pago Gerencia exclusion rule ─────────────────────────────────────
+#
+# These transactions are excluded from the Step 2 LINE-BY-LINE comparison
+# but still counted in Step 1 monthly aggregate totals.
+#
+# Rule (ticket #14):
+#   empresa or banco contains "Mercado Pago Gerencia" (case-insensitive)
+#   AND:
+#     Past months   (tx_month < current month) → exclude if cat_code == 25  (VENTAS)
+#     Current/future (tx_month >= current month) → exclude if cat_code == 28 (VENTAS ML)
+
+_MP_GERENCIA_KEYWORDS = {"mercado pago gerencia", "fondo azul"}
+
+
+def _is_mp_gerencia(tx) -> bool:
+    haystack = " ".join([
+        (tx.empresa or "").lower(),
+        (tx.banco   or "").lower(),
+        (tx.pestaña or "").lower(),
+    ])
+    return any(kw in haystack for kw in _MP_GERENCIA_KEYWORDS)
+
+
+def _is_excluded_from_control(tx, current_month: str) -> bool:
+    """Return True if this bank tx should be excluded from Step 2 comparison."""
+    if not _is_mp_gerencia(tx):
+        return False
+    tx_month = _month_key(tx.fecha)
+    if tx_month < current_month and tx.categoria_codigo == 25:
+        return True
+    if tx_month >= current_month and tx.categoria_codigo == 28:
+        return True
+    return False
+
+
 def _month_key(d: Optional[date]) -> str:
     return d.strftime("%Y-%m") if d else "SIN FECHA"
 
@@ -127,7 +162,7 @@ def _variance_pct(total_banco: float, total_caja: float, diferencia: float) -> f
 def run_control(
     bank_transactions: List[Transaction],
     caja_rows: List[dict],
-) -> Tuple[List[ControlVariance], Dict[tuple, dict]]:
+) -> Tuple[List[ControlVariance], Dict[tuple, dict], int]:
     """
     Build monthly category pivots from both sources and compute signed variances.
 
@@ -137,17 +172,32 @@ def run_control(
 
     Returns (variances, drilldown) where drilldown maps (mes, cat) →
     {"banco": [...tx dicts], "caja": [...tx dicts]} for the detail view.
+
+    Note: Mercado Pago Gerencia transactions matching ticket #14 exclusion
+    rules are skipped from bank_pivot but still exist in bank_transactions
+    (Step 1 totals are unaffected).
     """
     drilldown: dict = defaultdict(lambda: {"banco": [], "caja": []})
 
     # ── Bank pivot: (month, CATEGORY) → sum importe_neto (signed) ───────────
+    current_month = date.today().strftime("%Y-%m")
     bank_pivot: dict = defaultdict(float)
+    excluded_count = 0
     for tx in bank_transactions:
         if not tx.categoria_nombre:
             continue
         mes = _month_key(tx.fecha)
         cat = tx.categoria_nombre.strip().upper()
         key = (mes, cat)
+
+        if _is_excluded_from_control(tx, current_month):
+            excluded_count += 1
+            logger.debug(
+                f"Excluded from control: {tx.empresa} | {tx.banco} | "
+                f"cat={tx.categoria_codigo} | {mes} | {tx.importe_neto}"
+            )
+            continue
+
         bank_pivot[key] += tx.importe_neto   # signed — no abs()
         drilldown[key]["banco"].append({
             "fecha":        tx.fecha.isoformat() if tx.fecha else None,
@@ -157,6 +207,12 @@ def run_control(
             "referencia":   tx.nro_referencia or "",
             "importe":      round(tx.importe_neto, 2),
         })
+
+    if excluded_count:
+        logger.info(
+            f"Mercado Pago Gerencia exclusion rule: {excluded_count} bank transactions "
+            f"excluded from Step 2 comparison (still in Step 1 totals)"
+        )
 
     # ── Caja pivot: (month, CATEGORY) → sum importe (signed, = importe2) ────
     caja_pivot: dict = defaultdict(float)
@@ -233,6 +289,6 @@ def run_control(
     ok       = sum(1 for v in variances if v.estado == "OK")
     logger.info(
         f"Control — {ok} OK, {alert} ALERT, {critical} CRITICAL "
-        f"({len(variances)} total)"
+        f"({len(variances)} total) | MP Gerencia excluded: {excluded_count}"
     )
-    return variances, dict(drilldown)
+    return variances, dict(drilldown), excluded_count
