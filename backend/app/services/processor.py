@@ -212,11 +212,20 @@ class Processor:
 
         result = self._result
 
+        # Clear previous control state so stale drilldown data is never served
+        # while a new run is in progress.
+        self._control_drilldown = {}
+        result.control_variances = []
+
         progress("Cargando Caja Dirección...")
         caja_rows, warns = load_caja_direccion(path_caja_dir)
         for w in warns:
-            result.warnings.append(f"Caja Dir: {w}")
-            progress(f"  ⚠ {w}")
+            if w.startswith("__CANAL_DIST__"):
+                # Canal distribution info — log as normal progress, not a warning
+                progress(f"  ℹ {w[len('__CANAL_DIST__'):].strip()}")
+            else:
+                result.warnings.append(f"Caja Dir: {w}")
+                progress(f"  ⚠ {w}")
         progress(f"  → {len(caja_rows)} registros cargados (canal=1 / Transferencia)")
 
         progress("Construyendo pivotes mensuales por categoría...")

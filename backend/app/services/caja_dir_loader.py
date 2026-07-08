@@ -115,6 +115,7 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
     rows: List[dict] = []
     total = 0
     skipped = 0
+    canal_counts: Dict[str, int] = {}   # per-value distribution for debugging
 
     for row in all_rows[data_start:]:
         if all(cell is None for cell in row):
@@ -124,6 +125,9 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
         # Filter: C2 (canal numeric) must equal 1 (Transfer)
         if "canal" in col_map:
             canal_val = row[col_map["canal"]]
+            # Track distribution before filtering
+            canal_key = str(canal_val) if canal_val is not None else "None"
+            canal_counts[canal_key] = canal_counts.get(canal_key, 0) + 1
             try:
                 if int(canal_val) != 1:
                     skipped += 1
@@ -167,10 +171,13 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
         rows.append({"fecha": fecha, "categoria": categoria, "importe": importe, "descripcion": descripcion})
 
     if "canal" in col_map:
+        dist = ", ".join(f"canal={k}: {v}" for k, v in sorted(canal_counts.items()))
         logger.info(
             f"Caja Digital — total: {total}, filtrados (canal≠1): {skipped}, "
-            f"procesados: {len(rows)}"
+            f"procesados (canal=1): {len(rows)} | distribución: [{dist}]"
         )
+        # Surface canal breakdown so the caller can log it to SSE
+        warnings.append(f"__CANAL_DIST__ [{dist}] → {len(rows)} Transfer rows kept")
     else:
         logger.info(f"Caja Digital — total procesados: {len(rows)}")
 
