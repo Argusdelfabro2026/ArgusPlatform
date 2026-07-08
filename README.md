@@ -2,6 +2,7 @@
 
 > **Automated Bank Reconciliation System**  
 > Delfabro Group · v3.0.0 · 2026
+> https://argusdelfabro2026.github.io/ArgusPlatform
 
 ```
 ■ ARGUS v3.0.0 ■ BANK RECONCILIATION ■ DELFABRO GROUP [root@argus:~$]
