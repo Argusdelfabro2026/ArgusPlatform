@@ -137,13 +137,18 @@ def _is_mp_gerencia(tx) -> bool:
 
 
 def _is_excluded_from_control(tx, current_month: str) -> bool:
-    """Return True if this bank tx should be excluded from Step 2 comparison."""
+    """Return True if this bank tx should be excluded from Step 2 comparison.
+
+    Ticket #14 / #16 rules (Mercado Pago Gerencia / Fondo Azul):
+      cat 25 (VENTAS)    → excluded for ALL months (historical + current)
+      cat 28 (VENTAS ML) → excluded for current and future months only
+    """
     if not _is_mp_gerencia(tx):
         return False
+    if tx.categoria_codigo == 25:
+        return True          # all months, no date restriction
     tx_month = _month_key(tx.fecha)
-    if tx_month < current_month and tx.categoria_codigo == 25:
-        return True
-    if tx_month >= current_month and tx.categoria_codigo == 28:
+    if tx.categoria_codigo == 28 and tx_month >= current_month:
         return True
     return False
 

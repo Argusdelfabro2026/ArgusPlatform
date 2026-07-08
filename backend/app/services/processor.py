@@ -229,7 +229,7 @@ class Processor:
         progress(f"  → {len(caja_rows)} registros cargados (canal=1 / Transferencia)")
 
         progress("Construyendo pivotes mensuales por categoría...")
-        progress("  ℹ Regla Mercado Pago Gerencia activa — cat.25 (meses pasados) y cat.28 (mes actual) excluidos del control")
+        progress("  ℹ Regla Mercado Pago Gerencia activa — cat.25 (todos los meses) y cat.28 (mes actual en adelante) excluidos del control")
         variances, drilldown, mp_excluded = run_control(result.transactions, caja_rows)
         self._control_drilldown = drilldown
         if mp_excluded:
