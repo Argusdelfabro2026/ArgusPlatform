@@ -3,6 +3,9 @@
 
 import io
 import logging
+import re
+import zipfile
+from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import List
@@ -722,3 +725,94 @@ class Exporter:
         wb.save(buf)
         buf.seek(0)
         return buf.read()
+
+    # ── Odoo ZIP export (one Excel per bank account) ──────────────────────────
+
+    @staticmethod
+    def _odoo_filename(empresa: str, banco: str) -> str:
+        """Build a safe filename from empresa + banco."""
+        def slug(s: str) -> str:
+            s = s.strip()
+            s = re.sub(r"[^\w\s\-]", "", s)  # keep word chars, spaces, hyphens
+            s = re.sub(r"\s+", "_", s)
+            return s.upper()
+        return f"{slug(empresa)}_{slug(banco)}.xlsx"
+
+    def _build_odoo_account_bytes(
+        self, empresa: str, banco: str, transactions: List[Transaction]
+    ) -> bytes:
+        """Generate one Odoo Excel (in-memory bytes) for a single bank account."""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Odoo Import"
+
+        ws.merge_cells("A1:C1")
+        c = ws["A1"]
+        c.value     = (
+            f"ARGUS — Odoo  |  {empresa} / {banco}  |  "
+            f"{date.today().strftime('%d/%m/%Y')}"
+        )
+        c.font      = Font(bold=True, size=12, color="FFFFFF", name="Calibri")
+        c.fill      = _header_fill("1F3864")
+        c.alignment = ALIGN_CENTER
+        ws.row_dimensions[1].height = 20
+
+        _set_header_row(ws, ["Fecha", "Etiqueta", "Importe"], FILL_HEADER_BLUE, row=2)
+        ws.freeze_panes = "A3"
+
+        fill_income  = _header_fill("E2EFDA")
+        fill_expense = _header_fill("FCE4D6")
+
+        for row_idx, tx in enumerate(transactions, start=3):
+            etiqueta  = tx.descripcion.strip()
+            fecha_str = tx.fecha.strftime("%d/%m/%Y") if tx.fecha else ""
+            row_fill  = fill_income if tx.importe_neto >= 0 else fill_expense
+
+            for col_idx, val in enumerate([fecha_str, etiqueta, tx.importe_neto], start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.font   = FONT_NORMAL
+                cell.border = THIN_BORDER
+                cell.fill   = row_fill
+            ws.cell(row=row_idx, column=1).alignment = ALIGN_CENTER
+            ws.cell(row=row_idx, column=3).number_format = PESO_FORMAT
+            ws.cell(row=row_idx, column=3).alignment    = ALIGN_RIGHT
+
+        _auto_width(ws)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.read()
+
+    def export_odoo_zip_bytes(self, transactions: List[Transaction]) -> bytes:
+        """
+        Generate one Odoo-compatible Excel per bank account, return as ZIP bytes.
+
+        Grouping key: (empresa, banco) — identifies each bank account.
+        Filter: Canal = Transfer / Canal 1 only.
+        """
+        filtered = [
+            tx for tx in transactions
+            if tx.canal.strip().lower() in self._TRANSFER_CANALS
+        ]
+        logger.info(
+            f"Odoo ZIP export: {len(filtered)}/{len(transactions)} transfer transactions"
+        )
+
+        # Group by (empresa, banco)
+        groups: dict = defaultdict(list)
+        for tx in filtered:
+            key = (tx.empresa.strip(), tx.banco.strip())
+            groups[key].append(tx)
+
+        logger.info(f"Odoo ZIP export: {len(groups)} bank account(s)")
+
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for (empresa, banco), txs in sorted(groups.items()):
+                filename  = self._odoo_filename(empresa, banco)
+                xlsx_data = self._build_odoo_account_bytes(empresa, banco, txs)
+                zf.writestr(filename, xlsx_data)
+                logger.info(f"  → {filename}: {len(txs)} rows")
+
+        zip_buf.seek(0)
+        return zip_buf.read()

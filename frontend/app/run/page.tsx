@@ -7,7 +7,7 @@ import {
   streamPaso3,
   streamControl,
   downloadFile,
-  downloadOdooExport,
+  downloadOdooZip,
 } from '@/lib/api';
 import TerminalLog from '@/components/TerminalLog';
 import StepPanel from '@/components/StepPanel';
@@ -246,8 +246,8 @@ export default function RunPage() {
               onClick={async () => {
                 setOdooDownloading(true);
                 try {
-                  await downloadOdooExport(runId);
-                  addLog('✓ Odoo export descargado — Canal 1 Transfer transactions');
+                  await downloadOdooZip(runId);
+                  addLog('✓ Odoo ZIP descargado — un Excel por cuenta bancaria');
                 } catch (e) {
                   addLog(`✗ Odoo export error: ${e}`);
                 } finally {
@@ -259,7 +259,7 @@ export default function RunPage() {
                 rounded text-xs font-mono hover:bg-terminal-green/10 hover:border-terminal-green
                 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
             >
-              {odooDownloading ? '⏳ generando...' : '↓ EXPORT FOR ODOO'}
+              {odooDownloading ? '⏳ generando...' : '↓ EXPORT FOR ODOO (ZIP)'}
             </button>
           </div>
         )}

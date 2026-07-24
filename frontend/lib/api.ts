@@ -194,6 +194,21 @@ export async function downloadOdooExport(runId: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadOdooZip(runId: string): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/process/odoo-export-zip/${runId}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Odoo ZIP export failed: ${res.status} ${text}`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `argus_odoo_${runId}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function streamControl(
   runId: string,
   cajaDir: File,

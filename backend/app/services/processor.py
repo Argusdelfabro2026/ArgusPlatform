@@ -274,6 +274,12 @@ class Processor:
             raise ValueError("Step 1 must complete before generating Odoo export.")
         return self.exporter.export_odoo_bytes(self._result.transactions)
 
+    def get_odoo_zip_bytes(self) -> bytes:
+        """Generate one Odoo Excel per bank account, return as ZIP bytes."""
+        if self._result is None:
+            raise ValueError("Step 1 must complete before generating Odoo ZIP export.")
+        return self.exporter.export_odoo_zip_bytes(self._result.transactions)
+
     # ── Step 3: Caja Fábrica Digital ─────────────────────────────────────────
 
     def run_paso3(

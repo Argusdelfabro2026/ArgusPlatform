@@ -484,6 +484,28 @@ async def proceso_control(
     return EventSourceResponse(event_generator())
 
 
+@router.get("/odoo-export-zip/{run_id}")
+async def odoo_export_zip(run_id: str):
+    """Generate a ZIP with one Odoo-compatible Excel per bank account."""
+    processor = _processors.get(run_id)
+    if processor is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Run '{run_id}' not in memory — re-run Step 1 first.",
+        )
+    try:
+        zip_bytes = processor.get_odoo_zip_bytes()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="argus_odoo_{run_id}.zip"'
+        },
+    )
+
+
 @router.get("/odoo-export/{run_id}")
 async def odoo_export(run_id: str):
     """Generate and return an Odoo-compatible Excel for the Step 1 Transfer transactions."""
