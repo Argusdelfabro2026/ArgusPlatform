@@ -544,12 +544,13 @@ class Exporter:
         wb.save(path)
 
     def _add_evidence_sheet(self, wb, variances: list, drilldown: dict):
-        """Add a Transaction Evidence sheet: one row per transaction per category."""
+        """Add a Transaction Evidence sheet: one row per transaction, CRITICAL only."""
+        critical_variances = [v for v in variances if v.estado == "CRITICAL"]
         we = wb.create_sheet("Transaction Evidence")
 
         we.merge_cells("A1:I1")
         ce = we["A1"]
-        ce.value     = "ARGUS — Transaction Evidence (Step 2 Control Caja Dirección)"
+        ce.value     = f"ARGUS — Transaction Evidence · CRITICAL only ({len(critical_variances)} categories)"
         ce.font      = Font(bold=True, size=12, color="FFFFFF", name="Calibri")
         ce.fill      = _header_fill("1F4E79")
         ce.alignment = ALIGN_CENTER
@@ -566,7 +567,7 @@ class Exporter:
         fill_caja  = _header_fill("FFF5CC")
 
         row_idx = 3
-        for v in variances:
+        for v in critical_variances:
             key = (v.mes, v.categoria)
             dd  = drilldown.get(key, {"banco": [], "caja": []})
 
