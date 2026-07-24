@@ -671,7 +671,7 @@ class Exporter:
 
         Column mapping:
           Fecha    → tx.fecha formatted dd/mm/yyyy
-          Etiqueta → tx.descripcion + " | " + tx.detalle (trimmed, empty parts omitted)
+          Etiqueta → tx.descripcion (description only, no detalle concatenation)
           Importe  → tx.importe_neto (signed ARS)
 
         Only Canal = Transfer / Canal 1 records are included.
@@ -701,8 +701,7 @@ class Exporter:
         fill_expense = _header_fill("FCE4D6")  # red tint   — negative
 
         for row_idx, tx in enumerate(filtered, start=3):
-            parts    = [tx.descripcion.strip(), tx.detalle.strip()]
-            etiqueta = " | ".join(p for p in parts if p)
+            etiqueta  = tx.descripcion.strip()
             fecha_str = tx.fecha.strftime("%d/%m/%Y") if tx.fecha else ""
             row_fill  = fill_income if tx.importe_neto >= 0 else fill_expense
 
