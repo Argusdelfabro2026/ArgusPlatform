@@ -226,7 +226,7 @@ class Processor:
             else:
                 result.warnings.append(f"Caja Dir: {w}")
                 progress(f"  ⚠ {w}")
-        progress(f"  → {len(caja_rows)} registros cargados (canal=1 / Transferencia)")
+        progress(f"  → {len(caja_rows)} registros cargados (canal=1 / Transferencia, todas las hojas)")
 
         progress("Construyendo pivotes mensuales por categoría...")
         progress("  ℹ Regla Mercado Pago Gerencia activa — cat.25 (todos los meses) y cat.28 (mes actual en adelante) excluidos del control")

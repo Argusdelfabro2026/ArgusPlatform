@@ -70,26 +70,16 @@ def _detect_columns(header_row: tuple) -> Dict[str, int]:
     return mapping
 
 
-def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
+def _load_sheet_rows(
+    sheet_name: str,
+    all_rows: list,
+    warnings: List[str],
+) -> Tuple[List[dict], int, int, Dict[str, int]]:
     """
-    Load Caja Digital / Caja Dirección Excel and filter by canal == 1 (Transfer).
+    Process one sheet's rows: detect columns, filter canal=1, return parsed rows.
 
-    Returns:
-        rows     — list of dicts: {fecha, categoria (stripped), importe (signed)}
-        warnings — non-fatal issues detected during load
+    Returns (rows, total, skipped, canal_counts).
     """
-    warnings: List[str] = []
-
-    try:
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    except Exception as exc:
-        return [], [f"No se pudo abrir el archivo de Caja: {exc}"]
-
-    ws = wb.active
-    all_rows = list(ws.iter_rows(values_only=True))
-    if not all_rows:
-        return [], ["El archivo de Caja está vacío"]
-
     # Find first non-empty row as header
     header_row: Optional[tuple] = None
     data_start = 0
@@ -100,32 +90,32 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
             break
 
     if header_row is None:
-        return [], ["No se encontró encabezado en el archivo de Caja"]
+        warnings.append(f"Hoja '{sheet_name}': sin encabezado — omitida")
+        return [], 0, 0, {}
 
     col_map = _detect_columns(header_row)
-    logger.info(f"Caja Digital — columnas detectadas: {col_map}")
+    logger.info(f"Caja Digital [{sheet_name}] — columnas detectadas: {col_map}")
 
     if "importe" not in col_map:
-        return [], ["No se encontró columna de importe/importe2 en el archivo de Caja"]
+        warnings.append(f"Hoja '{sheet_name}': sin columna importe/importe2 — omitida")
+        return [], 0, 0, {}
     if "categoria" not in col_map:
-        warnings.append("Sin columna de categoría/TIPO detectada — se usará texto vacío")
+        warnings.append(f"Hoja '{sheet_name}': sin columna categoría/TIPO — se usará vacío")
     if "canal" not in col_map:
-        warnings.append("Sin columna 'C2' o 'Canal' — se incluirán todos los registros")
+        warnings.append(f"Hoja '{sheet_name}': sin columna C2/Canal — se incluirán todos los registros")
 
     rows: List[dict] = []
     total = 0
     skipped = 0
-    canal_counts: Dict[str, int] = {}   # per-value distribution for debugging
+    canal_counts: Dict[str, int] = {}
 
     for row in all_rows[data_start:]:
         if all(cell is None for cell in row):
             continue
         total += 1
 
-        # Filter: C2 (canal numeric) must equal 1 (Transfer)
         if "canal" in col_map:
             canal_val = row[col_map["canal"]]
-            # Track distribution before filtering
             canal_key = str(canal_val) if canal_val is not None else "None"
             canal_counts[canal_key] = canal_counts.get(canal_key, 0) + 1
             try:
@@ -136,7 +126,6 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
                 skipped += 1
                 continue
 
-        # Parse fecha
         fecha_raw = row[col_map["fecha"]] if "fecha" in col_map else None
         fecha: Optional[date] = None
         if isinstance(fecha_raw, date):
@@ -144,7 +133,6 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
         elif hasattr(fecha_raw, "date"):
             fecha = fecha_raw.date()
 
-        # Parse categoria — strip leading/trailing spaces for matching
         cat_idx = col_map.get("categoria")
         categoria = (
             str(row[cat_idx]).strip()
@@ -152,7 +140,6 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
             else ""
         )
 
-        # Parse importe — signed (importe2 is preferred: negative=expense, positive=income)
         importe = 0.0
         try:
             raw = row[col_map["importe"]]
@@ -170,15 +157,70 @@ def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
 
         rows.append({"fecha": fecha, "categoria": categoria, "importe": importe, "descripcion": descripcion})
 
-    if "canal" in col_map:
-        dist = ", ".join(f"canal={k}: {v}" for k, v in sorted(canal_counts.items()))
-        logger.info(
-            f"Caja Digital — total: {total}, filtrados (canal≠1): {skipped}, "
-            f"procesados (canal=1): {len(rows)} | distribución: [{dist}]"
-        )
-        # Surface canal breakdown so the caller can log it to SSE
-        warnings.append(f"__CANAL_DIST__ [{dist}] → {len(rows)} Transfer rows kept")
-    else:
-        logger.info(f"Caja Digital — total procesados: {len(rows)}")
+    return rows, total, skipped, canal_counts
 
-    return rows, warnings
+
+def load_caja_direccion(path: str) -> Tuple[List[dict], List[str]]:
+    """
+    Load Caja Digital / Caja Dirección Excel and filter by canal == 1 (Transfer).
+
+    Reads ALL sheets in the workbook (one per month) and consolidates the results.
+
+    Returns:
+        rows     — list of dicts: {fecha, categoria (stripped), importe (signed)}
+        warnings — non-fatal issues detected during load
+    """
+    warnings: List[str] = []
+
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    except Exception as exc:
+        return [], [f"No se pudo abrir el archivo de Caja: {exc}"]
+
+    sheet_names = wb.sheetnames
+    if not sheet_names:
+        return [], ["El archivo de Caja no tiene hojas"]
+
+    logger.info(f"Caja Digital — {len(sheet_names)} hojas encontradas: {sheet_names}")
+
+    all_rows: List[dict] = []
+    total_all = 0
+    skipped_all = 0
+    canal_counts_all: Dict[str, int] = {}
+    sheets_loaded = 0
+
+    for sheet_name in sheet_names:
+        ws = wb[sheet_name]
+        sheet_rows = list(ws.iter_rows(values_only=True))
+        if not sheet_rows or all(all(c is None for c in r) for r in sheet_rows):
+            logger.info(f"Caja Digital [{sheet_name}] — vacía, omitida")
+            continue
+
+        rows, total, skipped, canal_counts = _load_sheet_rows(sheet_name, sheet_rows, warnings)
+
+        all_rows.extend(rows)
+        total_all  += total
+        skipped_all += skipped
+        for k, v in canal_counts.items():
+            canal_counts_all[k] = canal_counts_all.get(k, 0) + v
+
+        logger.info(
+            f"Caja Digital [{sheet_name}] — total: {total}, "
+            f"filtrados (canal≠1): {skipped}, Transfer: {len(rows)}"
+        )
+        sheets_loaded += 1
+
+    if sheets_loaded == 0:
+        return [], ["No se encontraron hojas con datos válidos en el archivo de Caja"]
+
+    if canal_counts_all:
+        dist = ", ".join(f"canal={k}: {v}" for k, v in sorted(canal_counts_all.items()))
+        logger.info(
+            f"Caja Digital — TOTAL {sheets_loaded} hojas: {total_all} filas, "
+            f"filtradas: {skipped_all}, Transfer: {len(all_rows)} | [{dist}]"
+        )
+        warnings.append(f"__CANAL_DIST__ [{dist}] → {len(all_rows)} Transfer rows kept ({sheets_loaded} sheets)")
+    else:
+        logger.info(f"Caja Digital — total procesados: {len(all_rows)} ({sheets_loaded} hojas)")
+
+    return all_rows, warnings
