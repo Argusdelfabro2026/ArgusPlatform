@@ -677,13 +677,11 @@ class Exporter:
           Etiqueta → tx.descripcion (description only, no detalle concatenation)
           Importe  → tx.importe_neto (signed ARS)
 
-        Only Canal = Transfer / Canal 1 records are included.
+        All bank transactions are included (no canal filter — Odoo receives
+        the full bank statement for its own reconciliation engine).
         """
-        filtered = [
-            tx for tx in transactions
-            if tx.canal.strip().lower() in self._TRANSFER_CANALS
-        ]
-        logger.info(f"Odoo export: {len(filtered)}/{len(transactions)} transfer transactions")
+        filtered = transactions
+        logger.info(f"Odoo export: {len(filtered)} transactions")
 
         wb = Workbook()
         ws = wb.active
@@ -788,23 +786,19 @@ class Exporter:
         Generate one Odoo-compatible Excel per bank account, return as ZIP bytes.
 
         Grouping key: (empresa, banco) — identifies each bank account.
-        Filter: Canal = Transfer / Canal 1 only.
+        All transactions are included (no canal filter — Odoo receives the full
+        bank statement for its own reconciliation engine).
         """
-        filtered = [
-            tx for tx in transactions
-            if tx.canal.strip().lower() in self._TRANSFER_CANALS
-        ]
-        logger.info(
-            f"Odoo ZIP export: {len(filtered)}/{len(transactions)} transfer transactions"
-        )
+        if not transactions:
+            raise ValueError("No hay transacciones — completá el Paso 1 antes de exportar.")
 
         # Group by (empresa, banco)
         groups: dict = defaultdict(list)
-        for tx in filtered:
+        for tx in transactions:
             key = (tx.empresa.strip(), tx.banco.strip())
             groups[key].append(tx)
 
-        logger.info(f"Odoo ZIP export: {len(groups)} bank account(s)")
+        logger.info(f"Odoo ZIP export: {len(transactions)} transacciones, {len(groups)} cuenta(s) bancaria(s)")
 
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
