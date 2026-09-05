@@ -687,21 +687,14 @@ class Exporter:
         ws = wb.active
         ws.title = "Odoo Import"
 
-        ws.merge_cells("A1:C1")
-        c = ws["A1"]
-        c.value     = f"ARGUS — Odoo Bank Import  |  {date.today().strftime('%d/%m/%Y')}"
-        c.font      = Font(bold=True, size=13, color="FFFFFF", name="Calibri")
-        c.fill      = _header_fill("1F3864")
-        c.alignment = ALIGN_CENTER
-        ws.row_dimensions[1].height = 22
-
-        _set_header_row(ws, ["Fecha", "Etiqueta", "Importe"], FILL_HEADER_BLUE, row=2)
-        ws.freeze_panes = "A3"
+        # Row 1 = Odoo column headers directly (no title row above)
+        _set_header_row(ws, ["Fecha", "Etiqueta", "Importe"], FILL_HEADER_BLUE, row=1)
+        ws.freeze_panes = "A2"
 
         fill_income  = _header_fill("E2EFDA")  # green tint — positive
         fill_expense = _header_fill("FCE4D6")  # red tint   — negative
 
-        for row_idx, tx in enumerate(filtered, start=3):
+        for row_idx, tx in enumerate(filtered, start=2):
             etiqueta  = tx.descripcion.strip()
             fecha_str = tx.fecha.strftime("%d/%m/%Y") if tx.fecha else ""
             row_fill  = fill_income if tx.importe_neto >= 0 else fill_expense
@@ -744,24 +737,14 @@ class Exporter:
         ws = wb.active
         ws.title = "Odoo Import"
 
-        ws.merge_cells("A1:C1")
-        c = ws["A1"]
-        c.value     = (
-            f"ARGUS — Odoo  |  {empresa} / {banco}  |  "
-            f"{date.today().strftime('%d/%m/%Y')}"
-        )
-        c.font      = Font(bold=True, size=12, color="FFFFFF", name="Calibri")
-        c.fill      = _header_fill("1F3864")
-        c.alignment = ALIGN_CENTER
-        ws.row_dimensions[1].height = 20
-
-        _set_header_row(ws, ["Fecha", "Etiqueta", "Importe"], FILL_HEADER_BLUE, row=2)
-        ws.freeze_panes = "A3"
+        # Row 1 = Odoo column headers directly (no title row above)
+        _set_header_row(ws, ["Fecha", "Etiqueta", "Importe"], FILL_HEADER_BLUE, row=1)
+        ws.freeze_panes = "A2"
 
         fill_income  = _header_fill("E2EFDA")
         fill_expense = _header_fill("FCE4D6")
 
-        for row_idx, tx in enumerate(transactions, start=3):
+        for row_idx, tx in enumerate(transactions, start=2):
             etiqueta  = tx.descripcion.strip()
             fecha_str = tx.fecha.strftime("%d/%m/%Y") if tx.fecha else ""
             row_fill  = fill_income if tx.importe_neto >= 0 else fill_expense
